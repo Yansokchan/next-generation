@@ -1,113 +1,78 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { supabase } from "../integrations/supabase/client";
+import { Session, User } from "@supabase/supabase-js";
 
 interface AuthContextType {
+  session: Session | null;
+  user: User | null;
   isAuthenticated: boolean;
-  login: (password: string) => boolean;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+  loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const CORRECT_PASSWORD = "Pa$$w0rd"; // You should change this to your desired password
-const SESSION_TIMEOUT = 3 * 60 * 1000; // 3 minutes in milliseconds
-const ACTIVITY_EVENTS = [
-  "mousemove",
-  "keydown",
-  "click",
-  "scroll",
-  "touchstart",
-  "focus",
-  "blur",
-];
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    // Check if there's a stored session
-    const storedSession = localStorage.getItem("session");
-    if (storedSession) {
-      const { timestamp } = JSON.parse(storedSession);
-      const now = Date.now();
-      // If the stored session is still valid, restore it
-      if (now - timestamp < SESSION_TIMEOUT) {
-        return true;
-      } else {
-        localStorage.removeItem("session");
-      }
-    }
-    return false;
-  });
-  const [lastActivity, setLastActivity] = useState<number>(Date.now());
+  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const updateSession = () => {
-    const timestamp = Date.now();
-    setLastActivity(timestamp);
-    if (isAuthenticated) {
-      localStorage.setItem("session", JSON.stringify({ timestamp }));
-    }
-  };
-
-  const handleUserActivity = () => {
-    if (isAuthenticated) {
-      updateSession();
-    }
-  };
-
-  const login = (password: string) => {
-    const isValid = password === CORRECT_PASSWORD;
-    if (isValid) {
-      setIsAuthenticated(true);
-      updateSession();
-    }
-    return isValid;
-  };
-
-  const logout = () => {
-    setIsAuthenticated(false);
-    localStorage.removeItem("session");
-  };
-
-  // Set up activity listeners
   useEffect(() => {
-    if (isAuthenticated) {
-      // Add event listeners for user activity
-      ACTIVITY_EVENTS.forEach((event) => {
-        window.addEventListener(event, handleUserActivity);
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
+
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const login = async (email: string, password: string) => {
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
-
-      // Cleanup
-      return () => {
-        ACTIVITY_EVENTS.forEach((event) => {
-          window.removeEventListener(event, handleUserActivity);
-        });
-      };
+      if (error) throw error;
+    } catch (error) {
+      console.error("Error logging in:", error);
+      throw error;
     }
-  }, [isAuthenticated]);
+  };
 
-  // Check session status periodically
-  useEffect(() => {
-    if (isAuthenticated) {
-      const checkSession = () => {
-        const now = Date.now();
-        const timeSinceLastActivity = now - lastActivity;
-
-        if (timeSinceLastActivity >= SESSION_TIMEOUT) {
-          logout();
-        }
-      };
-
-      // Initial check
-      checkSession();
-
-      // Set up periodic checks
-      const intervalId = setInterval(checkSession, 1000);
-
-      return () => clearInterval(intervalId);
+  const logout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+    } catch (error) {
+      console.error("Error logging out:", error);
+      throw error;
     }
-  }, [isAuthenticated, lastActivity]);
+  };
+
+  const value = {
+    session,
+    user,
+    isAuthenticated: !!session,
+    login,
+    logout,
+    loading,
+  };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, login, logout }}>
-      {children}
+    <AuthContext.Provider value={value}>
+      {!loading && children}
     </AuthContext.Provider>
   );
 }
