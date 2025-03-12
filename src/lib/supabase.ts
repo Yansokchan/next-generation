@@ -17,7 +17,7 @@ const supabaseUrl =
   "https://khtkcvecjfjzmoormqjp.supabase.co";
 const supabaseAnonKey =
   import.meta.env.VITE_SUPABASE_ANON_KEY ||
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtodGtjdmVjamZqem1vb3JtcWpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEyNjk5ODUsImV4cCI6MjA1Njg0NTk4NX0.n-GfbUikJ0QkxHrgW1SyGA-vV1k8xrvq4m4SRZ4H970";
+  "VITE_SUPABASE_ANON_KEY";
 
 // Create Supabase client as a singleton
 let supabaseInstance: ReturnType<typeof createClient> | null = null;
