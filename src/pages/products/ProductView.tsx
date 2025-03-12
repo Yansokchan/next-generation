@@ -59,10 +59,7 @@ export default function ProductView() {
     try {
       const data = await fetchProductById(productId);
       if (data) {
-        setProduct({
-          ...data,
-          createdAt: data.createdAt ? new Date(data.createdAt) : new Date(),
-        });
+        setProduct(data);
       }
     } catch (error) {
       console.error("Error loading product:", error);
@@ -116,7 +113,9 @@ export default function ProductView() {
                 <p className="text-sm font-medium text-muted-foreground">
                   Color
                 </p>
-                <p className="text-sm font-medium">{iPhoneProduct.color}</p>
+                <p className="text-sm font-medium">
+                  {iPhoneProduct.iphone_details?.color || "N/A"}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -127,7 +126,9 @@ export default function ProductView() {
                 <p className="text-sm font-medium text-muted-foreground">
                   Storage
                 </p>
-                <p className="text-sm font-medium">{iPhoneProduct.storage}</p>
+                <p className="text-sm font-medium">
+                  {iPhoneProduct.iphone_details?.storage || "N/A"}
+                </p>
               </div>
             </div>
           </div>
@@ -145,7 +146,9 @@ export default function ProductView() {
                 <p className="text-sm font-medium text-muted-foreground">
                   Wattage
                 </p>
-                <p className="text-sm font-medium">{chargerProduct.wattage}</p>
+                <p className="text-sm font-medium">
+                  {chargerProduct.charger_details?.wattage || "N/A"}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -157,7 +160,9 @@ export default function ProductView() {
                   Fast Charging
                 </p>
                 <p className="text-sm font-medium">
-                  {chargerProduct.isFastCharging ? "Yes" : "No"}
+                  {chargerProduct.charger_details?.is_fast_charging
+                    ? "Yes"
+                    : "No"}
                 </p>
               </div>
             </div>
@@ -176,7 +181,9 @@ export default function ProductView() {
                 <p className="text-sm font-medium text-muted-foreground">
                   Type
                 </p>
-                <p className="text-sm font-medium">{cableProduct.type}</p>
+                <p className="text-sm font-medium">
+                  {cableProduct.cable_details?.type || "N/A"}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -187,7 +194,9 @@ export default function ProductView() {
                 <p className="text-sm font-medium text-muted-foreground">
                   Length
                 </p>
-                <p className="text-sm font-medium">{cableProduct.length}</p>
+                <p className="text-sm font-medium">
+                  {cableProduct.cable_details?.length || "N/A"}
+                </p>
               </div>
             </div>
           </div>
@@ -378,7 +387,7 @@ export default function ProductView() {
                       Created At
                     </p>
                     <p className="text-lg font-medium text-blue-600">
-                      {formatDate(product.createdAt)}
+                      {formatDate(product.created_at)}
                     </p>
                   </div>
                 </div>
@@ -433,7 +442,7 @@ export default function ProductView() {
                             Color
                           </p>
                           <p className="text-lg font-medium text-blue-600">
-                            {iPhoneProduct.color}
+                            {iPhoneProduct.iphone_details?.color || "N/A"}
                           </p>
                         </div>
                       </div>
@@ -446,7 +455,7 @@ export default function ProductView() {
                             Storage
                           </p>
                           <p className="text-lg font-medium text-blue-600">
-                            {iPhoneProduct.storage}
+                            {iPhoneProduct.iphone_details?.storage || "N/A"}
                           </p>
                         </div>
                       </div>
@@ -466,7 +475,22 @@ export default function ProductView() {
                             Wattage
                           </p>
                           <p className="text-lg font-medium text-blue-600">
-                            {chargerProduct.wattage}
+                            {chargerProduct.charger_details?.wattage || "N/A"}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="p-3 bg-blue-50 rounded-xl">
+                          <Battery className="h-6 w-6 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-500 mb-1">
+                            Fast Charging
+                          </p>
+                          <p className="text-lg font-medium text-blue-600">
+                            {chargerProduct.charger_details?.is_fast_charging
+                              ? "Yes"
+                              : "No"}
                           </p>
                         </div>
                       </div>
@@ -486,7 +510,7 @@ export default function ProductView() {
                             Type
                           </p>
                           <p className="text-lg font-medium text-blue-600">
-                            {cableProduct.type}
+                            {cableProduct.cable_details?.type || "N/A"}
                           </p>
                         </div>
                       </div>
@@ -499,7 +523,7 @@ export default function ProductView() {
                             Length
                           </p>
                           <p className="text-lg font-medium text-blue-600">
-                            {cableProduct.length}
+                            {cableProduct.cable_details?.length || "N/A"}
                           </p>
                         </div>
                       </div>

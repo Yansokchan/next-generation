@@ -1,14 +1,15 @@
-export type Customer = {
-  id: string;
+import { Json } from "@/integrations/supabase/types";
+
+export interface Customer {
+  id: number;
   name: string;
   email: string;
   phone: string;
   address: string;
-  createdAt: Date;
-  purchaseCount?: number; // Added for UI display
-};
+  created_at: string;
+}
 
-export type Employee = {
+export interface Employee {
   id: string;
   name: string;
   email: string;
@@ -17,12 +18,12 @@ export type Employee = {
   position: string;
   department: string;
   salary: number;
-  hireDate: Date;
-  status: "active" | "inactive"; // Add status field
-  image_url?: string; // Changed from imageUrl to image_url to match database
-  salesCount?: number; // Added for UI display
-  salesAmount?: number; // Added for UI display
-};
+  hire_date: string;
+  status: "active" | "inactive";
+  image_url?: string;
+  created_at: string;
+  updated_at: string;
+}
 
 export const PRODUCT_CATEGORIES = [
   "iPhone",
@@ -31,6 +32,9 @@ export const PRODUCT_CATEGORIES = [
   "AirPod",
 ] as const;
 export type ProductCategory = (typeof PRODUCT_CATEGORIES)[number];
+
+export const PRODUCT_STATUS = ["available", "unavailable"] as const;
+export type ProductStatus = (typeof PRODUCT_STATUS)[number];
 
 export const IPHONE_COLORS = [
   "Black",
@@ -76,38 +80,63 @@ export type CableType = (typeof CABLE_TYPES)[number];
 export const CABLE_LENGTHS = ["1m", "2m"] as const;
 export type CableLength = (typeof CABLE_LENGTHS)[number];
 
-export type BaseProduct = {
+export interface BaseProduct {
   id: string;
   name: string;
   description: string;
   price: number;
-  category: ProductCategory;
   stock: number;
   status: "available" | "unavailable";
-  createdAt: Date;
-};
+  category: "iPhone" | "Charger" | "Cable" | "AirPod";
+  created_at: string;
+  updated_at: string;
+}
 
-export type iPhoneProduct = BaseProduct & {
+export interface iPhoneDetails {
+  id: string;
+  product_id: string;
+  color: string;
+  storage: string;
+}
+
+export interface ChargerDetails {
+  id: string;
+  product_id: string;
+  wattage: string;
+  is_fast_charging: boolean;
+}
+
+export interface CableDetails {
+  id: string;
+  product_id: string;
+  type: string;
+  length: string;
+}
+
+export interface AirPodDetails {
+  id: string;
+  product_id: string;
+}
+
+export interface iPhoneProduct extends BaseProduct {
   category: "iPhone";
-  color: iPhoneColor;
-  storage: iPhoneStorage;
-};
+  iphone_details: iPhoneDetails | null;
+}
 
-export type ChargerProduct = BaseProduct & {
+export interface ChargerProduct extends BaseProduct {
   category: "Charger";
-  wattage: ChargerWattage;
-  isFastCharging: boolean;
-};
+  charger_details: ChargerDetails | null;
+}
 
-export type CableProduct = BaseProduct & {
+export interface CableProduct extends BaseProduct {
   category: "Cable";
-  type: CableType;
-  length: CableLength; // Updated to use CableLength type
-};
+  cable_details: CableDetails | null;
+}
 
-export type AirPodProduct = BaseProduct & {
+export interface AirPodProduct extends BaseProduct {
   category: "AirPod";
-};
+  airpod_details: AirPodDetails | null;
+}
 
 export type Product =
   | iPhoneProduct
@@ -115,23 +144,32 @@ export type Product =
   | CableProduct
   | AirPodProduct;
 
-export type OrderItem = {
+export const ORDER_STATUS = ["pending", "completed", "cancelled"] as const;
+export type OrderStatus = (typeof ORDER_STATUS)[number];
+
+export interface OrderItem {
   id: string;
-  productId: string;
-  productName: string;
+  order_id: string;
+  product_id: string;
   quantity: number;
   price: number;
-  details?: string;
-  stockAfterOrder?: number;
-};
+  details: Json;
+  created_at: string;
+  product?: {
+    id: string;
+    name: string;
+    price: number;
+  };
+}
 
-export type Order = {
+export interface Order {
   id: string;
-  customerId: string;
-  customerName: string;
-  employeeId: string;
-  employeeName: string;
-  items: Array<OrderItem>;
+  customer_id: number;
+  customer_name?: string;
+  employee_id: string;
   total: number;
-  createdAt: Date;
-};
+  status: OrderStatus;
+  created_at: string;
+  updated_at: string;
+  items: OrderItem[];
+}

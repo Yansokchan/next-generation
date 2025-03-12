@@ -110,7 +110,7 @@ const useCountAnimation = (end: number, duration: number = 2000) => {
 };
 
 // Wrap the Card component with motion
-const AnimatedCard = motion(Card);
+const AnimatedCard = motion.create(Card);
 
 const Index = () => {
   const navigate = useNavigate();
@@ -137,11 +137,24 @@ const Index = () => {
       const orders = await fetchOrders();
       const ordersWithCustomers = await Promise.all(
         orders.map(async (order) => {
-          const customer = await fetchCustomerById(order.customerId);
-          return {
-            ...order,
-            customerName: customer?.name || "Unknown Customer",
-          };
+          try {
+            if (!order.customer_id || isNaN(order.customer_id)) {
+              return {
+                ...order,
+                customerName: "Unknown Customer",
+              };
+            }
+            const customer = await fetchCustomerById(order.customer_id);
+            return {
+              ...order,
+              customerName: customer?.name || "Unknown Customer",
+            };
+          } catch (error) {
+            return {
+              ...order,
+              customerName: "Unknown Customer",
+            };
+          }
         })
       );
       return ordersWithCustomers;
@@ -162,7 +175,7 @@ const Index = () => {
   const recentOrders = [...orders]
     .sort(
       (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     )
     .slice(0, 5);
 
@@ -506,7 +519,7 @@ const Index = () => {
                   >
                     <TableCell>
                       <span className="font-medium text-gray-900">
-                        {order.id.substring(0, 8).toUpperCase()}
+                        #{order.id.toString().padStart(8, "0")}
                       </span>
                     </TableCell>
                     <TableCell>
@@ -521,7 +534,7 @@ const Index = () => {
                     </TableCell>
                     <TableCell>
                       <span className="text-gray-600">
-                        {format(new Date(order.createdAt), "MMM d, yyyy")}
+                        {format(new Date(order.created_at), "MMM d, yyyy")}
                       </span>
                     </TableCell>
                   </TableRow>

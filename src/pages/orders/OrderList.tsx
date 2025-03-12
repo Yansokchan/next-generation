@@ -27,7 +27,7 @@ const OrderList = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [orderToDelete, setOrderToDelete] = useState<string | null>(null);
+  const [orderToDelete, setOrderToDelete] = useState<number | null>(null);
 
   const {
     data: orders = [],
@@ -39,11 +39,28 @@ const OrderList = () => {
       const orders = await fetchOrders();
       const ordersWithCustomers = await Promise.all(
         orders.map(async (order) => {
-          const customer = await fetchCustomerById(order.customerId);
-          return {
-            ...order,
-            customerName: customer?.name || "Unknown Customer",
-          };
+          try {
+            if (!order.customer_id || isNaN(order.customer_id)) {
+              return {
+                ...order,
+                customer_name: "Unknown Customer",
+              };
+            }
+            const customer = await fetchCustomerById(order.customer_id);
+            return {
+              ...order,
+              customer_name: customer?.name || "Unknown Customer",
+            };
+          } catch (error) {
+            console.error(
+              `Error fetching customer for order ${order.id}:`,
+              error
+            );
+            return {
+              ...order,
+              customer_name: "Unknown Customer",
+            };
+          }
         })
       );
       return ordersWithCustomers;
@@ -61,7 +78,7 @@ const OrderList = () => {
       ),
       cell: ({ row }) => (
         <span className="font-medium text-gray-900">
-          {row.original.id.toUpperCase().substring(0, 8)}
+          {row.original.id.toString().substring(0, 8)}
         </span>
       ),
     },
@@ -74,7 +91,7 @@ const OrderList = () => {
         </div>
       ),
       cell: ({ row }) => (
-        <span className="text-gray-900">{row.original.customerName}</span>
+        <span className="text-gray-900">{row.original.customer_name}</span>
       ),
     },
     {
@@ -94,7 +111,7 @@ const OrderList = () => {
       ),
     },
     {
-      accessorKey: "createdAt",
+      accessorKey: "created_at",
       header: () => (
         <div className="flex items-center gap-2">
           <Calendar className="h-4 w-4 text-blue-600" />
@@ -103,13 +120,13 @@ const OrderList = () => {
       ),
       cell: ({ row }) => (
         <span className="text-gray-600">
-          {format(new Date(row.original.createdAt), "MMM d, yyyy")}
+          {format(new Date(row.original.created_at), "MMM d, yyyy")}
         </span>
       ),
     },
   ];
 
-  const handleDelete = (id: string) => {
+  const handleDelete = (id: number) => {
     setOrderToDelete(id);
     setShowDeleteDialog(true);
   };
@@ -277,7 +294,7 @@ const OrderList = () => {
             <DataTable
               columns={columns}
               data={orders}
-              searchKeys={["id", "customerName"]}
+              searchKeys={["id", "customer_name"]}
               basePath="/orders"
               onDelete={handleDelete}
             />

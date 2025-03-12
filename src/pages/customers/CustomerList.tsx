@@ -27,7 +27,7 @@ const CustomerList = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [customerToDelete, setCustomerToDelete] = useState<string | null>(null);
+  const [customerToDelete, setCustomerToDelete] = useState<number | null>(null);
 
   const {
     data: customers = [],
@@ -80,7 +80,7 @@ const CustomerList = () => {
       ),
     },
     {
-      accessorKey: "createdAt",
+      accessorKey: "created_at",
       header: () => (
         <div className="flex items-center gap-2">
           <Calendar className="h-4 w-4 text-blue-600" />
@@ -90,14 +90,14 @@ const CustomerList = () => {
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
           <span className="text-gray-600">
-            {format(new Date(row.original.createdAt), "MMM d, yyyy")}
+            {format(new Date(row.original.created_at), "MMM d, yyyy")}
           </span>
         </div>
       ),
     },
   ];
 
-  const handleDelete = (id: string) => {
+  const handleDelete = (id: number) => {
     setCustomerToDelete(id);
     setShowDeleteDialog(true);
   };
@@ -257,7 +257,6 @@ const CustomerList = () => {
             <DataTable
               data={customers}
               columns={columns}
-              getRowId={(row) => row.id}
               onDelete={handleDelete}
               searchable
               searchKeys={["name", "email", "phone"]}

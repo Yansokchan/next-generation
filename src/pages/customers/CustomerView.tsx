@@ -26,7 +26,6 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { fetchCustomerById, getCustomerPurchaseCount } from "@/lib/supabase";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getCustomerById } from "@/lib/data";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
@@ -35,16 +34,28 @@ const CustomerView = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  const numericId = id ? Number(id) : null;
+
   const { data: customer, isLoading: isLoadingCustomer } = useQuery({
     queryKey: ["customer", id],
-    queryFn: () => getCustomerById(id || ""),
-    enabled: !!id,
+    queryFn: () => {
+      if (!numericId || isNaN(numericId)) {
+        throw new Error("Invalid customer ID");
+      }
+      return fetchCustomerById(numericId);
+    },
+    enabled: !!numericId && !isNaN(numericId),
   });
 
   const { data: purchaseCount, isLoading: isLoadingPurchases } = useQuery({
     queryKey: ["customer-purchases", id],
-    queryFn: () => getCustomerPurchaseCount(id || ""),
-    enabled: !!id,
+    queryFn: () => {
+      if (!numericId || isNaN(numericId)) {
+        throw new Error("Invalid customer ID");
+      }
+      return getCustomerPurchaseCount(numericId);
+    },
+    enabled: !!numericId && !isNaN(numericId),
   });
 
   if (isLoadingCustomer) {
@@ -149,7 +160,7 @@ const CustomerView = () => {
                   <Calendar className="h-4 w-4" />
                   <CardDescription className="text-base">
                     Customer since{" "}
-                    {format(new Date(customer.createdAt), "MMMM d, yyyy")}
+                    {format(new Date(customer.created_at), "MMMM d, yyyy")}
                   </CardDescription>
                 </div>
               </div>

@@ -37,16 +37,16 @@ export interface Column<T> {
 interface DataTableProps<T> {
   data: T[];
   columns: Column<T>[];
-  getRowId?: (row: T) => string;
-  onView?: (id: string) => void;
-  onEdit?: (id: string) => void;
-  onDelete?: (id: string) => void;
+  getRowId?: (row: T) => string | number;
+  onView?: (id: string | number) => void;
+  onEdit?: (id: string | number) => void;
+  onDelete?: (id: string | number) => void;
   searchable?: boolean;
   searchKeys?: Array<keyof T>;
   basePath?: string;
 }
 
-export function DataTable<T extends { id: string }>({
+export function DataTable<T extends { id: string | number }>({
   data,
   columns,
   getRowId = (row) => row.id,
@@ -85,7 +85,7 @@ export function DataTable<T extends { id: string }>({
   );
 
   // Handlers
-  const handleView = (id: string) => {
+  const handleView = (id: string | number) => {
     if (onView) {
       onView(id);
     } else if (basePath) {
@@ -93,7 +93,7 @@ export function DataTable<T extends { id: string }>({
     }
   };
 
-  const handleEdit = (id: string) => {
+  const handleEdit = (id: string | number) => {
     if (onEdit) {
       onEdit(id);
     } else if (basePath) {
@@ -101,7 +101,7 @@ export function DataTable<T extends { id: string }>({
     }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = (id: string | number) => {
     if (onDelete) {
       onDelete(id);
     }

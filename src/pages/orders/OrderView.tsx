@@ -52,26 +52,47 @@ const OrderView = () => {
     error: orderError,
   } = useQuery({
     queryKey: ["order", id],
-    queryFn: () => fetchOrderById(id || ""),
-    enabled: !!id,
+    queryFn: async () => {
+      const numericId = Number(id);
+      if (isNaN(numericId)) {
+        throw new Error("Invalid order ID");
+      }
+      const order = await fetchOrderById(numericId);
+      if (!order) {
+        throw new Error("Order not found");
+      }
+      return order;
+    },
+    enabled: !!id && !isNaN(Number(id)),
+    retry: false,
   });
 
   const { data: customer, isLoading: isLoadingCustomer } = useQuery({
-    queryKey: ["customer", order?.customerId],
-    queryFn: () => fetchCustomerById(order?.customerId || ""),
-    enabled: !!order?.customerId,
+    queryKey: ["customer", order?.customer_id],
+    queryFn: () => {
+      if (!order?.customer_id || isNaN(order.customer_id)) {
+        return null;
+      }
+      return fetchCustomerById(order.customer_id);
+    },
+    enabled: !!order?.customer_id && !isNaN(order.customer_id),
   });
 
   const { data: employee, isLoading: isLoadingEmployee } = useQuery({
-    queryKey: ["employee", order?.employeeId],
-    queryFn: () => fetchEmployeeById(order?.employeeId || ""),
-    enabled: !!order?.employeeId,
+    queryKey: ["employee", order?.employee_id],
+    queryFn: () => {
+      if (!order?.employee_id || isNaN(order.employee_id)) {
+        return null;
+      }
+      return fetchEmployeeById(order.employee_id);
+    },
+    enabled: !!order?.employee_id && !isNaN(order.employee_id),
   });
 
   const handleDelete = async () => {
     if (!id) return;
 
-    const result = await deleteOrder(id);
+    const result = await deleteOrder(Number(id));
 
     if (result.success) {
       toast({
@@ -187,8 +208,8 @@ const OrderView = () => {
 
   return (
     <Layout
-      title={`Order #${order.id.slice(0, 8).toUpperCase()}`}
-      description={`Created on ${format(new Date(order.createdAt), "PPP")}`}
+      title={`Order #${order.id.toString().slice(0, 8).toUpperCase()}`}
+      description={`Created on ${format(new Date(order.created_at), "PPP")}`}
     >
       <div className="max-w-6xl mx-auto px-4 space-y-8">
         <div className="flex justify-between items-center">
@@ -267,7 +288,7 @@ const OrderView = () => {
                       Order ID
                     </dt>
                     <dd className="text-base font-medium text-blue-600">
-                      {order.id.toUpperCase().substring(0, 8)}
+                      {order.id.toString().toUpperCase().substring(0, 8)}
                     </dd>
                   </div>
                 </div>
@@ -278,7 +299,7 @@ const OrderView = () => {
                   <div>
                     <dt className="text-sm font-medium text-gray-500">Date</dt>
                     <dd className="text-base font-medium text-blue-600">
-                      {format(new Date(order.createdAt), "PPP")}
+                      {format(new Date(order.created_at), "PPP")}
                     </dd>
                   </div>
                 </div>
@@ -473,28 +494,17 @@ const OrderView = () => {
                 <tbody className="divide-y divide-gray-200">
                   {(order.items || []).map((item) => (
                     <tr key={item.id} className="group hover:bg-gray-50/50">
-                      <td className="py-4">
-                        <div className="font-medium text-blue-600">
-                          {item.productName}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          ID: {item.productId.substring(0, 8).toUpperCase()}
-                        </div>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {item.product?.name || "Unknown Product"}
                       </td>
-                      <td className="py-4 text-right">
-                        <div className="font-medium text-blue-600">
-                          ${item.price.toFixed(2)}
-                        </div>
-                        <div className="text-sm text-gray-500">per unit</div>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {item.product_id}
                       </td>
-                      <td className="py-4 text-right">
-                        <div className="font-medium text-blue-600">
-                          {item.quantity}
-                        </div>
-                        <div className="text-sm text-gray-500">units</div>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {item.quantity}
                       </td>
-                      <td className="py-4 text-right font-medium text-blue-600">
-                        ${(item.price * item.quantity).toFixed(2)}
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        ${item.price.toFixed(2)}
                       </td>
                     </tr>
                   ))}

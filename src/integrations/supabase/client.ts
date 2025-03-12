@@ -22,7 +22,7 @@ class SupabaseClientSingleton {
         {
           auth: {
             persistSession: true,
-            storageKey: "app-storage-key",
+            storageKey: "supabase-auth",
             storage:
               typeof window !== "undefined" ? window.localStorage : undefined,
             autoRefreshToken: true,

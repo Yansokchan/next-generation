@@ -95,13 +95,13 @@ const EmployeeList = () => {
           <span className="font-medium text-gray-700">Hire Date</span>
         </div>
       ),
-      accessorKey: "hireDate",
+      accessorKey: "hire_date",
       cell: ({ row }) => {
         try {
           return (
             <div className="flex items-center gap-2">
               <span className="text-gray-600">
-                {format(new Date(row.original.hireDate), "MMM d, yyyy")}
+                {format(new Date(row.original.hire_date), "MMM d, yyyy")}
               </span>
             </div>
           );

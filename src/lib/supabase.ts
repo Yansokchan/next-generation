@@ -1,41 +1,18 @@
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "../integrations/supabase/client";
 import {
   Customer,
   Employee,
   Product,
   Order,
+  OrderItem,
   iPhoneProduct,
   ChargerProduct,
   CableProduct,
   AirPodProduct,
+  OrderStatus,
 } from "./types";
+import { Json } from "../integrations/supabase/types";
 import { v4 as uuidv4 } from "uuid";
-
-// Get Supabase URL and anon key from environment variables
-const supabaseUrl =
-  import.meta.env.VITE_SUPABASE_URL ||
-  "https://khtkcvecjfjzmoormqjp.supabase.co";
-const supabaseAnonKey =
-  import.meta.env.VITE_SUPABASE_ANON_KEY ||
-  "VITE_SUPABASE_ANON_KEY";
-
-// Create Supabase client as a singleton
-let supabaseInstance: ReturnType<typeof createClient> | null = null;
-
-export const supabase = (() => {
-  if (typeof window !== "undefined" && !supabaseInstance) {
-    supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        persistSession: true,
-        storageKey: "app-supabase-auth",
-      },
-    });
-  }
-  return supabaseInstance;
-})();
-
-// Check if Supabase is properly configured
-const isSupabaseConfigured = supabaseUrl && supabaseAnonKey;
 
 // Helper function to validate UUID
 export const isValidUUID = (uuid: string) => {
@@ -58,140 +35,61 @@ const ensureUUID = (id: string) => {
 
 // Customer functions
 export const fetchCustomers = async (): Promise<Customer[]> => {
-  if (!isSupabaseConfigured) {
-    console.warn("Supabase not configured, returning empty customers array");
-    return [];
-  }
-
   try {
-    const { data, error } = await supabase
-      .from("customers")
-      .select("*")
-      .order("name");
+    const { data, error } = await supabase.from("customers").select("*");
 
     if (error) {
       console.error("Error fetching customers:", error);
       return [];
     }
 
-    return data.map((customer) => ({
-      ...customer,
-      id: ensureUUID(customer.id),
-      createdAt: customer.created_at
-        ? new Date(new Date(customer.created_at).toUTCString())
-        : new Date(),
-    })) as Customer[];
-  } catch (err) {
-    console.error("Error in fetchCustomers:", err);
+    return data;
+  } catch (error) {
+    console.error("Error in fetchCustomers:", error);
     return [];
   }
 };
 
 export const fetchCustomerById = async (
-  id: string
+  customerId: string | number
 ): Promise<Customer | null> => {
-  if (!isSupabaseConfigured) {
-    console.warn("Supabase not configured, returning null customer");
-    return null;
-  }
-
-  if (!id) {
-    console.error("Customer ID is required");
-    return null;
-  }
-
-  // Validate UUID format
-  if (!isValidUUID(id)) {
-    console.error("Invalid UUID format for customer ID:", id);
-    return null;
-  }
-
   try {
-    // First check if the customer exists
-    const { count, error: countError } = await supabase
-      .from("customers")
-      .select("*", { count: "exact", head: true })
-      .eq("id", id);
-
-    if (countError) {
-      console.error("Error checking customer existence:", countError);
+    if (!customerId) {
+      console.error("Invalid customer ID:", customerId);
       return null;
     }
 
-    if (!count) {
-      console.error("No customer found with ID:", id);
+    const numericId = Number(customerId);
+    if (isNaN(numericId)) {
+      console.error("Invalid customer ID:", customerId);
       return null;
     }
 
-    // Then fetch the customer data
     const { data, error } = await supabase
       .from("customers")
-      .select("id, name, email, phone, address, created_at")
-      .eq("id", id)
-      .limit(1)
-      .maybeSingle();
+      .select("*")
+      .eq("id", numericId)
+      .single();
 
     if (error) {
       console.error("Error fetching customer:", error);
       return null;
     }
 
-    if (!data) {
-      console.error("No customer data found with ID:", id);
-      return null;
-    }
-
-    // Convert snake_case to camelCase
-    return {
-      id: data.id,
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
-      address: data.address,
-      createdAt: data.created_at
-        ? new Date(new Date(data.created_at).toUTCString())
-        : new Date(),
-    } as Customer;
-  } catch (err) {
-    console.error("Error in fetchCustomerById:", err);
+    return data;
+  } catch (error) {
+    console.error("Error in fetchCustomerById:", error);
     return null;
   }
 };
 
 export const createCustomer = async (
-  customer: Omit<Customer, "id" | "createdAt">
+  customer: Omit<Customer, "id" | "created_at">
 ): Promise<Customer | null> => {
-  if (!isSupabaseConfigured) {
-    console.warn("Supabase not configured, returning null for create customer");
-    return null;
-  }
-
   try {
-    const newId = uuidv4();
-    const now = new Date();
-    const utcDate = new Date(
-      Date.UTC(
-        now.getUTCFullYear(),
-        now.getUTCMonth(),
-        now.getUTCDate(),
-        now.getUTCHours(),
-        now.getUTCMinutes(),
-        now.getUTCSeconds()
-      )
-    );
-
     const { data, error } = await supabase
       .from("customers")
-      .insert([
-        {
-          id: newId,
-          name: customer.name,
-          email: customer.email,
-          phone: customer.phone,
-          address: customer.address,
-          created_at: utcDate.toISOString(),
-        },
-      ])
+      .insert([customer])
       .select()
       .single();
 
@@ -200,34 +98,28 @@ export const createCustomer = async (
       return null;
     }
 
-    return {
-      ...data,
-      id: newId,
-      createdAt: data.created_at
-        ? new Date(new Date(data.created_at).toUTCString())
-        : utcDate,
-    } as Customer;
-  } catch (err) {
-    console.error("Error in createCustomer:", err);
+    return data;
+  } catch (error) {
+    console.error("Error in createCustomer:", error);
     return null;
   }
 };
 
 export const updateCustomer = async (
-  id: string,
-  customer: Partial<Customer>
+  id: string | number,
+  customer: Partial<Omit<Customer, "id" | "created_at">>
 ): Promise<Customer | null> => {
-  if (!isSupabaseConfigured) {
-    console.warn("Supabase not configured, returning null for update customer");
-    return null;
-  }
-
   try {
-    const uuid = ensureUUID(id);
+    const numericId = Number(id);
+    if (isNaN(numericId)) {
+      console.error("Invalid customer ID:", id);
+      return null;
+    }
+
     const { data, error } = await supabase
       .from("customers")
       .update(customer)
-      .eq("id", uuid)
+      .eq("id", numericId)
       .select()
       .single();
 
@@ -236,28 +128,25 @@ export const updateCustomer = async (
       return null;
     }
 
-    return {
-      ...data,
-      id: uuid,
-      createdAt: data.createdAt ? new Date(data.createdAt) : new Date(),
-    } as Customer;
-  } catch (err) {
-    console.error("Error in updateCustomer:", err);
+    return data;
+  } catch (error) {
+    console.error("Error in updateCustomer:", error);
     return null;
   }
 };
 
-export const deleteCustomer = async (id: string): Promise<boolean> => {
-  if (!isSupabaseConfigured) {
-    console.warn(
-      "Supabase not configured, returning false for delete customer"
-    );
-    return false;
-  }
-
+export const deleteCustomer = async (id: string | number): Promise<boolean> => {
   try {
-    const uuid = ensureUUID(id);
-    const { error } = await supabase.from("customers").delete().eq("id", uuid);
+    const numericId = Number(id);
+    if (isNaN(numericId)) {
+      console.error("Invalid customer ID:", id);
+      return false;
+    }
+
+    const { error } = await supabase
+      .from("customers")
+      .delete()
+      .eq("id", numericId);
 
     if (error) {
       console.error("Error deleting customer:", error);
@@ -265,24 +154,16 @@ export const deleteCustomer = async (id: string): Promise<boolean> => {
     }
 
     return true;
-  } catch (err) {
-    console.error("Error in deleteCustomer:", err);
+  } catch (error) {
+    console.error("Error in deleteCustomer:", error);
     return false;
   }
 };
 
 // Employee functions
 export const fetchEmployees = async (): Promise<Employee[]> => {
-  if (!isSupabaseConfigured) {
-    console.warn("Supabase not configured, returning empty employees array");
-    return [];
-  }
-
   try {
-    const { data, error } = await supabase
-      .from("employees")
-      .select("*")
-      .order("name");
+    const { data, error } = await supabase.from("employees").select("*");
 
     if (error) {
       console.error("Error fetching employees:", error);
@@ -291,36 +172,27 @@ export const fetchEmployees = async (): Promise<Employee[]> => {
 
     return data.map((employee) => ({
       ...employee,
-      id: ensureUUID(employee.id),
-      hireDate: employee.hire_date
-        ? new Date(new Date(employee.hire_date).toUTCString())
-        : new Date(),
-    })) as Employee[];
-  } catch (err) {
-    console.error("Error in fetchEmployees:", err);
+      id: employee.id.toString(),
+    }));
+  } catch (error) {
+    console.error("Error in fetchEmployees:", error);
     return [];
   }
 };
 
 export const fetchEmployeeById = async (
-  id: string
+  employeeId: string
 ): Promise<Employee | null> => {
-  if (!isSupabaseConfigured) {
-    console.warn("Supabase not configured, returning null employee");
-    return null;
-  }
-
-  if (!id) {
-    console.error("Employee ID is required");
-    return null;
-  }
-
   try {
-    const uuid = ensureUUID(id);
+    if (!employeeId) {
+      console.error("Invalid employee ID:", employeeId);
+      return null;
+    }
+
     const { data, error } = await supabase
       .from("employees")
       .select("*")
-      .eq("id", uuid)
+      .eq("id", employeeId)
       .single();
 
     if (error) {
@@ -328,120 +200,50 @@ export const fetchEmployeeById = async (
       return null;
     }
 
-    return {
-      ...data,
-      id: uuid,
-      hireDate: data.hire_date
-        ? new Date(new Date(data.hire_date).toUTCString())
-        : new Date(),
-    } as Employee;
-  } catch (err) {
-    console.error("Error in fetchEmployeeById:", err);
+    return data;
+  } catch (error) {
+    console.error("Error in fetchEmployeeById:", error);
     return null;
   }
 };
 
 export const createEmployee = async (
-  employee: Omit<Employee, "id" | "hireDate">
+  employee: Omit<Employee, "id" | "created_at" | "updated_at">
 ): Promise<{ success: boolean; data?: Employee; error?: string }> => {
-  if (!isSupabaseConfigured) {
-    console.warn("Supabase not configured, returning null for create employee");
-    return { success: false, error: "Database not configured" };
-  }
-
   try {
-    const newId = uuidv4();
-    const now = new Date();
-    const utcDate = new Date(
-      Date.UTC(
-        now.getUTCFullYear(),
-        now.getUTCMonth(),
-        now.getUTCDate(),
-        now.getUTCHours(),
-        now.getUTCMinutes(),
-        now.getUTCSeconds()
-      )
-    );
-
     const { data, error } = await supabase
       .from("employees")
-      .insert([
-        {
-          id: newId,
-          name: employee.name,
-          email: employee.email,
-          phone: employee.phone,
-          address: employee.address,
-          position: employee.position,
-          department: employee.department,
-          salary: employee.salary,
-          hire_date: utcDate.toISOString(),
-        },
-      ])
+      .insert([employee])
       .select()
       .single();
 
     if (error) {
       console.error("Error creating employee:", error);
-      if (error.code === "23505") {
-        // Unique constraint violation (duplicate email)
-        return {
-          success: false,
-          error: `An employee with the email "${employee.email}" already exists. Please use a different email address.`,
-        };
-      }
-      return { success: false, error: "Failed to create employee" };
+      return { success: false, error: error.message };
     }
 
     return {
       success: true,
       data: {
         ...data,
-        id: newId,
-        hireDate: data.hire_date
-          ? new Date(new Date(data.hire_date).toUTCString())
-          : utcDate,
+        id: data.id.toString(),
       } as Employee,
     };
   } catch (err) {
     console.error("Error in createEmployee:", err);
-    return { success: false, error: "An unexpected error occurred" };
+    return { success: false, error: "Internal server error" };
   }
 };
 
 export const updateEmployee = async (
   id: string,
-  employee: Partial<Employee>
+  employee: Partial<Omit<Employee, "id" | "created_at" | "updated_at">>
 ): Promise<Employee | null> => {
-  if (!isSupabaseConfigured) {
-    console.warn("Supabase not configured, returning null for update employee");
-    return null;
-  }
-
   try {
-    const uuid = ensureUUID(id);
-
-    // Convert camelCase to snake_case and ensure UTC dates
-    let updateData: any = { ...employee };
-    if (employee.hireDate) {
-      const date = new Date(employee.hireDate);
-      updateData.hire_date = new Date(
-        Date.UTC(
-          date.getUTCFullYear(),
-          date.getUTCMonth(),
-          date.getUTCDate(),
-          date.getUTCHours(),
-          date.getUTCMinutes(),
-          date.getUTCSeconds()
-        )
-      ).toISOString();
-      delete updateData.hireDate; // Remove the camelCase version
-    }
-
     const { data, error } = await supabase
       .from("employees")
-      .update(updateData)
-      .eq("id", uuid)
+      .update(employee)
+      .eq("id", id)
       .select()
       .single();
 
@@ -450,13 +252,7 @@ export const updateEmployee = async (
       return null;
     }
 
-    return {
-      ...data,
-      id: uuid,
-      hireDate: data.hire_date
-        ? new Date(new Date(data.hire_date).toUTCString())
-        : new Date(),
-    } as Employee;
+    return data as Employee;
   } catch (err) {
     console.error("Error in updateEmployee:", err);
     return null;
@@ -466,53 +262,18 @@ export const updateEmployee = async (
 export const deleteEmployee = async (
   id: string
 ): Promise<{ success: boolean; error?: string }> => {
-  if (!isSupabaseConfigured) {
-    console.warn(
-      "Supabase not configured, returning false for delete employee"
-    );
-    return { success: false, error: "Database not configured" };
-  }
-
   try {
-    const uuid = ensureUUID(id);
-
-    // First check if employee has any associated orders
-    const { count, error: countError } = await supabase
-      .from("orders")
-      .select("*", { count: "exact", head: true })
-      .eq("employee_id", uuid);
-
-    if (countError) {
-      console.error("Error checking employee orders:", countError);
-      return { success: false, error: "Failed to check employee orders" };
-    }
-
-    if (count && count > 0) {
-      return {
-        success: false,
-        error: `Cannot delete employee: ${count} orders are associated with this employee. Please reassign or delete the orders first.`,
-      };
-    }
-
-    const { error } = await supabase.from("employees").delete().eq("id", uuid);
+    const { error } = await supabase.from("employees").delete().eq("id", id);
 
     if (error) {
       console.error("Error deleting employee:", error);
-      if (error.code === "23503") {
-        // Foreign key violation
-        return {
-          success: false,
-          error:
-            "Cannot delete employee: There are orders or other records associated with this employee",
-        };
-      }
-      return { success: false, error: "Failed to delete employee" };
+      return { success: false, error: error.message };
     }
 
     return { success: true };
   } catch (err) {
     console.error("Error in deleteEmployee:", err);
-    return { success: false, error: "An unexpected error occurred" };
+    return { success: false, error: "Internal server error" };
   }
 };
 
@@ -520,33 +281,15 @@ export const deleteEmployee = async (
 export const uploadEmployeeImage = async (
   employeeId: string,
   file: File
-): Promise<string | null> => {
-  if (!isSupabaseConfigured) {
-    console.warn("Supabase not configured, returning null for image upload");
-    return null;
-  }
-
+): Promise<string> => {
   try {
-    // Validate file type
-    if (!file.type.startsWith("image/")) {
-      throw new Error("Invalid file type. Only images are allowed.");
-    }
-
-    // Validate file size (5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      throw new Error("File size too large. Maximum size is 5MB.");
-    }
-
     const fileExt = file.name.split(".").pop();
-    const fileName = `${employeeId}-${Date.now()}.${fileExt}`;
-    const filePath = `${fileName}`;
+    const fileName = `${employeeId}-${Math.random()}.${fileExt}`;
+    const filePath = `employee-profiles/${fileName}`;
 
-    // Upload the file to Supabase storage with public access
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabase.storage
       .from("employee-profiles")
       .upload(filePath, file, {
-        upsert: true,
-        contentType: file.type,
         cacheControl: "3600",
       });
 
@@ -583,11 +326,6 @@ export const uploadEmployeeImage = async (
 export const deleteEmployeeImage = async (
   employeeId: string
 ): Promise<boolean> => {
-  if (!isSupabaseConfigured) {
-    console.warn("Supabase not configured, returning false for image deletion");
-    return false;
-  }
-
   try {
     // Get the current employee to find the image path
     const { data: employee, error: fetchError } = await supabase
@@ -611,7 +349,7 @@ export const deleteEmployeeImage = async (
       .remove([`employee-profiles/${fileName}`]);
 
     if (deleteError) {
-      console.error("Error deleting image:", deleteError);
+      console.error("Error deleting employee image:", deleteError);
       return false;
     }
 
@@ -622,10 +360,7 @@ export const deleteEmployeeImage = async (
       .eq("id", employeeId);
 
     if (updateError) {
-      console.error(
-        "Error updating employee after image deletion:",
-        updateError
-      );
+      console.error("Error updating employee record:", updateError);
       return false;
     }
 
@@ -638,24 +373,14 @@ export const deleteEmployeeImage = async (
 
 // Product functions
 export const fetchProducts = async (): Promise<Product[]> => {
-  if (!isSupabaseConfigured) {
-    console.warn("Supabase not configured, returning empty products array");
-    return [];
-  }
-
   try {
-    const { data, error } = await supabase
-      .from("products")
-      .select(
-        `
+    const { data, error } = await supabase.from("products").select(`
         *,
         iphone_details (*),
         charger_details (*),
         cable_details (*),
         airpod_details (*)
-      `
-      )
-      .order("name");
+      `);
 
     if (error) {
       console.error("Error fetching products:", error);
@@ -663,76 +388,56 @@ export const fetchProducts = async (): Promise<Product[]> => {
     }
 
     return data.map((product) => {
-      const baseProductData = {
-        id: ensureUUID(product.id),
+      const baseProduct = {
+        id: product.id,
         name: product.name,
         description: product.description,
-        price: parseFloat(String(product.price)) || 0,
-        stock: parseInt(String(product.stock)) || 0,
-        status: product.status || "available",
+        price: product.price,
+        stock: product.stock,
+        status: product.status,
         category: product.category,
-        createdAt: product.created_at
-          ? new Date(product.created_at)
-          : new Date(),
+        created_at: product.created_at,
+        updated_at: product.updated_at,
       };
 
       switch (product.category) {
         case "iPhone":
-          return product.iphone_details
-            ? ({
-                ...baseProductData,
-                category: "iPhone",
-                color: product.iphone_details.color,
-                storage: product.iphone_details.storage,
-              } as iPhoneProduct)
-            : baseProductData;
+          return {
+            ...baseProduct,
+            category: "iPhone",
+            iphone_details: product.iphone_details?.[0] || null,
+          } as iPhoneProduct;
         case "Charger":
-          return product.charger_details
-            ? ({
-                ...baseProductData,
-                category: "Charger",
-                wattage: product.charger_details.wattage,
-                isFastCharging: product.charger_details.is_fast_charging,
-              } as ChargerProduct)
-            : baseProductData;
+          return {
+            ...baseProduct,
+            category: "Charger",
+            charger_details: product.charger_details?.[0] || null,
+          } as ChargerProduct;
         case "Cable":
-          return product.cable_details
-            ? ({
-                ...baseProductData,
-                category: "Cable",
-                type: product.cable_details.type,
-                length: product.cable_details.length,
-              } as CableProduct)
-            : baseProductData;
+          return {
+            ...baseProduct,
+            category: "Cable",
+            cable_details: product.cable_details?.[0] || null,
+          } as CableProduct;
         case "AirPod":
           return {
-            ...baseProductData,
+            ...baseProduct,
             category: "AirPod",
+            airpod_details: product.airpod_details?.[0] || null,
           } as AirPodProduct;
         default:
-          return baseProductData;
+          return baseProduct as Product;
       }
     });
-  } catch (err) {
-    console.error("Error in fetchProducts:", err);
+  } catch (error) {
+    console.error("Error in fetchProducts:", error);
     return [];
   }
 };
 
 export const fetchProductById = async (id: string): Promise<Product | null> => {
-  if (!isSupabaseConfigured) {
-    console.warn("Supabase not configured, returning null product");
-    return null;
-  }
-
-  if (!id) {
-    console.error("Product ID is required");
-    return null;
-  }
-
   try {
-    const uuid = ensureUUID(id);
-    const { data: completeProduct, error } = await supabase
+    const { data: product, error } = await supabase
       .from("products")
       .select(
         `
@@ -743,7 +448,7 @@ export const fetchProductById = async (id: string): Promise<Product | null> => {
         airpod_details (*)
       `
       )
-      .eq("id", uuid)
+      .eq("id", id)
       .single();
 
     if (error) {
@@ -751,86 +456,92 @@ export const fetchProductById = async (id: string): Promise<Product | null> => {
       return null;
     }
 
-    // Convert to the appropriate product type
-    const baseProductData = {
-      id: ensureUUID(completeProduct.id),
-      name: completeProduct.name,
-      description: completeProduct.description,
-      price: parseFloat(String(completeProduct.price)) || 0,
-      stock: parseInt(String(completeProduct.stock)) || 0,
-      status: completeProduct.status || "available",
-      category: completeProduct.category,
-      createdAt: completeProduct.created_at
-        ? new Date(completeProduct.created_at)
-        : new Date(),
+    const baseProduct = {
+      id: product.id.toString(),
+      name: product.name,
+      description: product.description,
+      price: product.price,
+      stock: product.stock,
+      status: product.status,
+      category: product.category,
+      created_at: product.created_at,
+      updated_at: product.updated_at,
     };
 
-    switch (completeProduct.category) {
+    switch (product.category) {
       case "iPhone":
-        return completeProduct.iphone_details
-          ? ({
-              ...baseProductData,
-              category: "iPhone",
-              color: completeProduct.iphone_details.color,
-              storage: completeProduct.iphone_details.storage,
-            } as iPhoneProduct)
-          : null;
+        return {
+          ...baseProduct,
+          category: "iPhone",
+          iphone_details: product.iphone_details?.[0]
+            ? {
+                id: product.iphone_details[0].id.toString(),
+                product_id: product.iphone_details[0].product_id.toString(),
+                color: product.iphone_details[0].color,
+                storage: product.iphone_details[0].storage,
+              }
+            : null,
+        } as iPhoneProduct;
       case "Charger":
-        return completeProduct.charger_details
-          ? ({
-              ...baseProductData,
-              category: "Charger",
-              wattage: completeProduct.charger_details.wattage,
-              isFastCharging: completeProduct.charger_details.is_fast_charging,
-            } as ChargerProduct)
-          : null;
+        return {
+          ...baseProduct,
+          category: "Charger",
+          charger_details: product.charger_details?.[0]
+            ? {
+                id: product.charger_details[0].id.toString(),
+                product_id: product.charger_details[0].product_id.toString(),
+                wattage: product.charger_details[0].wattage,
+                is_fast_charging: product.charger_details[0].is_fast_charging,
+              }
+            : null,
+        } as ChargerProduct;
       case "Cable":
-        return completeProduct.cable_details
-          ? ({
-              ...baseProductData,
-              category: "Cable",
-              type: completeProduct.cable_details.type,
-              length: completeProduct.cable_details.length,
-            } as CableProduct)
-          : null;
+        return {
+          ...baseProduct,
+          category: "Cable",
+          cable_details: product.cable_details?.[0]
+            ? {
+                id: product.cable_details[0].id.toString(),
+                product_id: product.cable_details[0].product_id.toString(),
+                type: product.cable_details[0].type,
+                length: product.cable_details[0].length,
+              }
+            : null,
+        } as CableProduct;
       case "AirPod":
         return {
-          ...baseProductData,
+          ...baseProduct,
           category: "AirPod",
+          airpod_details: product.airpod_details?.[0]
+            ? {
+                id: product.airpod_details[0].id.toString(),
+                product_id: product.airpod_details[0].product_id.toString(),
+              }
+            : null,
         } as AirPodProduct;
       default:
-        return null;
+        return baseProduct as Product;
     }
-  } catch (err) {
-    console.error("Error in fetchProductById:", err);
+  } catch (error) {
+    console.error("Error in fetchProductById:", error);
     return null;
   }
 };
 
 export const createProduct = async (
-  product: Omit<Product, "id" | "createdAt">
+  product: Omit<Product, "id" | "created_at" | "updated_at">
 ): Promise<Product | null> => {
-  if (!isSupabaseConfigured) {
-    console.warn("Supabase not configured, returning null for create product");
-    return null;
-  }
-
   try {
-    const newId = uuidv4();
-
-    // Base product data
+    // First create the base product
     const baseData = {
-      id: newId,
       name: product.name,
       description: product.description,
-      price: parseFloat(String(product.price)) || 0,
-      stock: parseInt(String(product.stock)) || 0,
-      status: product.status || "available",
+      price: product.price,
+      stock: product.stock,
       category: product.category,
-      created_at: new Date().toISOString(),
+      status: product.status,
     };
 
-    // First create the base product
     const { data: baseProduct, error: baseError } = await supabase
       .from("products")
       .insert([baseData])
@@ -842,59 +553,55 @@ export const createProduct = async (
       return null;
     }
 
-    // Then add category-specific details
+    // Then create the category-specific details
     let detailsError = null;
     switch (product.category) {
       case "iPhone": {
-        const iPhoneProduct = product as Omit<
-          iPhoneProduct,
-          "id" | "createdAt"
-        >;
-        const { error } = await supabase.from("iphone_details").insert([
-          {
-            product_id: newId,
-            color: iPhoneProduct.color,
-            storage: iPhoneProduct.storage,
-          },
-        ]);
-        detailsError = error;
+        const iPhoneProduct = product as iPhoneProduct;
+        if (iPhoneProduct.iphone_details) {
+          const { error } = await supabase.from("iphone_details").insert([
+            {
+              product_id: baseProduct.id,
+              color: iPhoneProduct.iphone_details.color,
+              storage: iPhoneProduct.iphone_details.storage,
+            },
+          ]);
+          detailsError = error;
+        }
         break;
       }
       case "Charger": {
-        const chargerProduct = product as Omit<
-          ChargerProduct,
-          "id" | "createdAt"
-        >;
-        const { error } = await supabase.from("charger_details").insert([
-          {
-            product_id: newId,
-            wattage: chargerProduct.wattage,
-            is_fast_charging: chargerProduct.isFastCharging,
-          },
-        ]);
-        detailsError = error;
+        const chargerProduct = product as ChargerProduct;
+        if (chargerProduct.charger_details) {
+          const { error } = await supabase.from("charger_details").insert([
+            {
+              product_id: baseProduct.id,
+              wattage: chargerProduct.charger_details.wattage,
+              is_fast_charging: chargerProduct.charger_details.is_fast_charging,
+            },
+          ]);
+          detailsError = error;
+        }
         break;
       }
       case "Cable": {
-        const cableProduct = product as Omit<CableProduct, "id" | "createdAt">;
-        const { error } = await supabase.from("cable_details").insert([
-          {
-            product_id: newId,
-            type: cableProduct.type,
-            length: cableProduct.length,
-          },
-        ]);
-        detailsError = error;
+        const cableProduct = product as CableProduct;
+        if (cableProduct.cable_details) {
+          const { error } = await supabase.from("cable_details").insert([
+            {
+              product_id: baseProduct.id,
+              type: cableProduct.cable_details.type,
+              length: cableProduct.cable_details.length,
+            },
+          ]);
+          detailsError = error;
+        }
         break;
       }
       case "AirPod": {
-        const airPodProduct = product as Omit<
-          AirPodProduct,
-          "id" | "createdAt"
-        >;
         const { error } = await supabase.from("airpod_details").insert([
           {
-            product_id: newId,
+            product_id: baseProduct.id,
           },
         ]);
         detailsError = error;
@@ -905,105 +612,28 @@ export const createProduct = async (
     if (detailsError) {
       console.error("Error creating product details:", detailsError);
       // Clean up the base product if details creation failed
-      await supabase.from("products").delete().eq("id", newId);
+      await supabase.from("products").delete().eq("id", baseProduct.id);
       return null;
     }
 
-    // Fetch the complete product with its details
-    const { data: completeProduct, error: fetchError } = await supabase
-      .from("products")
-      .select(
-        `
-        *,
-        iphone_details (*),
-        charger_details (*),
-        cable_details (*),
-        airpod_details (*)
-      `
-      )
-      .eq("id", newId)
-      .single();
-
-    if (fetchError) {
-      console.error("Error fetching complete product:", fetchError);
-      return null;
-    }
-
-    // Convert to the appropriate product type
-    const baseProductData = {
-      id: ensureUUID(completeProduct.id),
-      name: completeProduct.name,
-      description: completeProduct.description,
-      price: parseFloat(String(completeProduct.price)) || 0,
-      stock: parseInt(String(completeProduct.stock)) || 0,
-      status: completeProduct.status || "available",
-      category: completeProduct.category,
-      createdAt: completeProduct.created_at
-        ? new Date(completeProduct.created_at)
-        : new Date(),
-    };
-
-    switch (completeProduct.category) {
-      case "iPhone":
-        return completeProduct.iphone_details
-          ? ({
-              ...baseProductData,
-              category: "iPhone",
-              color: completeProduct.iphone_details.color,
-              storage: completeProduct.iphone_details.storage,
-            } as iPhoneProduct)
-          : null;
-      case "Charger":
-        return completeProduct.charger_details
-          ? ({
-              ...baseProductData,
-              category: "Charger",
-              wattage: completeProduct.charger_details.wattage,
-              isFastCharging: completeProduct.charger_details.is_fast_charging,
-            } as ChargerProduct)
-          : null;
-      case "Cable":
-        return completeProduct.cable_details
-          ? ({
-              ...baseProductData,
-              category: "Cable",
-              type: completeProduct.cable_details.type,
-              length: completeProduct.cable_details.length,
-            } as CableProduct)
-          : null;
-      case "AirPod":
-        return completeProduct.airpod_details
-          ? ({
-              ...baseProductData,
-              category: "AirPod",
-            } as AirPodProduct)
-          : null;
-      default:
-        return null;
-    }
-  } catch (err) {
-    console.error("Error in createProduct:", err);
+    // Return the complete product
+    return fetchProductById(baseProduct.id);
+  } catch (error) {
+    console.error("Error in createProduct:", error);
     return null;
   }
 };
 
 export const updateProduct = async (
-  id: string,
-  product: Partial<Product>
+  id: number,
+  product: Partial<Omit<Product, "id" | "created_at" | "updated_at">>
 ): Promise<Product | null> => {
-  if (!isSupabaseConfigured) {
-    console.warn("Supabase not configured, returning null for update product");
-    return null;
-  }
-
   try {
-    const uuid = ensureUUID(id);
-
     // First get the current product to know its category
     const { data: currentProduct, error: fetchError } = await supabase
       .from("products")
-      .select("*")
-      .eq("id", uuid)
+      .select("category")
+      .eq("id", id)
       .single();
 
     if (fetchError) {
@@ -1011,33 +641,19 @@ export const updateProduct = async (
       return null;
     }
 
-    // Base update data
-    const baseData = {
-      name: product.name,
-      description: product.description,
-      price:
-        product.price !== undefined
-          ? parseFloat(String(product.price))
-          : undefined,
-      stock:
-        product.stock !== undefined
-          ? parseInt(String(product.stock))
-          : undefined,
-      status: product.status,
-    };
-
-    // Remove undefined values
-    const cleanedData = Object.fromEntries(
-      Object.entries(baseData).filter(([_, value]) => value !== undefined)
-    );
+    // Update base product fields
+    const baseData: Record<string, unknown> = {};
+    if (product.name) baseData.name = product.name;
+    if (product.description) baseData.description = product.description;
+    if (product.price) baseData.price = product.price;
+    if (product.stock) baseData.stock = product.stock;
+    if (product.status) baseData.status = product.status;
 
     // Update base product
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("products")
-      .update(cleanedData)
-      .eq("id", uuid)
-      .select()
-      .single();
+      .update(baseData)
+      .eq("id", id);
 
     if (error) {
       console.error("Error updating product:", error);
@@ -1049,45 +665,42 @@ export const updateProduct = async (
     switch (currentProduct.category) {
       case "iPhone": {
         const iPhoneProduct = product as Partial<iPhoneProduct>;
-        if (iPhoneProduct.color || iPhoneProduct.storage) {
+        if (iPhoneProduct.iphone_details) {
           const { error } = await supabase
             .from("iphone_details")
             .update({
-              color: iPhoneProduct.color,
-              storage: iPhoneProduct.storage,
+              color: iPhoneProduct.iphone_details.color,
+              storage: iPhoneProduct.iphone_details.storage,
             })
-            .eq("product_id", uuid);
+            .eq("product_id", id);
           detailsError = error;
         }
         break;
       }
       case "Charger": {
         const chargerProduct = product as Partial<ChargerProduct>;
-        if (
-          chargerProduct.wattage ||
-          chargerProduct.isFastCharging !== undefined
-        ) {
+        if (chargerProduct.charger_details) {
           const { error } = await supabase
             .from("charger_details")
             .update({
-              wattage: chargerProduct.wattage,
-              is_fast_charging: chargerProduct.isFastCharging,
+              wattage: chargerProduct.charger_details.wattage,
+              is_fast_charging: chargerProduct.charger_details.is_fast_charging,
             })
-            .eq("product_id", uuid);
+            .eq("product_id", id);
           detailsError = error;
         }
         break;
       }
       case "Cable": {
         const cableProduct = product as Partial<CableProduct>;
-        if (cableProduct.type || cableProduct.length) {
+        if (cableProduct.cable_details) {
           const { error } = await supabase
             .from("cable_details")
             .update({
-              type: cableProduct.type,
-              length: cableProduct.length,
+              type: cableProduct.cable_details.type,
+              length: cableProduct.cable_details.length,
             })
-            .eq("product_id", uuid);
+            .eq("product_id", id);
           detailsError = error;
         }
         break;
@@ -1099,91 +712,21 @@ export const updateProduct = async (
       return null;
     }
 
-    // Fetch the complete product with its details
-    const { data: completeProduct, error: fetchCompleteError } = await supabase
-      .from("products")
-      .select(
-        `
-        *,
-        iphone_details (*),
-        charger_details (*),
-        cable_details (*),
-        airpod_details (*)
-      `
-      )
-      .eq("id", uuid)
-      .single();
-
-    if (fetchCompleteError) {
-      console.error("Error fetching complete product:", fetchCompleteError);
-      return null;
-    }
-
-    // Convert to the appropriate product type
-    const baseProductData = {
-      id: ensureUUID(completeProduct.id),
-      name: completeProduct.name,
-      description: completeProduct.description,
-      price: parseFloat(String(completeProduct.price)) || 0,
-      stock: parseInt(String(completeProduct.stock)) || 0,
-      status: completeProduct.status || "available",
-      category: completeProduct.category,
-      createdAt: completeProduct.created_at
-        ? new Date(completeProduct.created_at)
-        : new Date(),
-    };
-
-    switch (completeProduct.category) {
-      case "iPhone":
-        return completeProduct.iphone_details
-          ? ({
-              ...baseProductData,
-              category: "iPhone",
-              color: completeProduct.iphone_details.color,
-              storage: completeProduct.iphone_details.storage,
-            } as iPhoneProduct)
-          : null;
-      case "Charger":
-        return completeProduct.charger_details
-          ? ({
-              ...baseProductData,
-              category: "Charger",
-              wattage: completeProduct.charger_details.wattage,
-              isFastCharging: completeProduct.charger_details.is_fast_charging,
-            } as ChargerProduct)
-          : null;
-      case "Cable":
-        return completeProduct.cable_details
-          ? ({
-              ...baseProductData,
-              category: "Cable",
-              type: completeProduct.cable_details.type,
-              length: completeProduct.cable_details.length,
-            } as CableProduct)
-          : null;
-      case "AirPod":
-        return {
-          ...baseProductData,
-          category: "AirPod",
-        } as AirPodProduct;
-      default:
-        return null;
-    }
-  } catch (err) {
-    console.error("Error in updateProduct:", err);
+    // Return the updated product
+    return fetchProductById(id);
+  } catch (error) {
+    console.error("Error in updateProduct:", error);
     return null;
   }
 };
 
-export const deleteProduct = async (id: string): Promise<boolean> => {
-  if (!isSupabaseConfigured) {
-    console.warn("Supabase not configured, returning false for delete product");
-    return false;
-  }
-
+export const deleteProduct = async (id: string | number): Promise<boolean> => {
   try {
-    const uuid = ensureUUID(id);
-    const { error } = await supabase.from("products").delete().eq("id", uuid);
+    const numericId = typeof id === "string" ? parseInt(id, 10) : id;
+    const { error } = await supabase
+      .from("products")
+      .delete()
+      .eq("id", numericId);
 
     if (error) {
       console.error("Error deleting product:", error);
@@ -1199,27 +742,24 @@ export const deleteProduct = async (id: string): Promise<boolean> => {
 
 // Order functions
 export const fetchOrders = async (): Promise<Order[]> => {
-  if (!isSupabaseConfigured) {
-    console.warn("Supabase not configured, returning empty orders array");
-    return [];
-  }
-
   try {
-    const { data, error } = await supabase
-      .from("orders")
-      .select(
-        `
+    const { data, error } = await supabase.from("orders").select(`
         *,
         order_items (
           id,
+          order_id,
           product_id,
-          product_name,
           quantity,
-          price
+          price,
+          details,
+          created_at,
+          product:products!order_items_product_id_fkey (
+            id,
+            name,
+            price
+          )
         )
-      `
-      )
-      .order("created_at", { ascending: false });
+      `);
 
     if (error) {
       console.error("Error fetching orders:", error);
@@ -1227,58 +767,23 @@ export const fetchOrders = async (): Promise<Order[]> => {
     }
 
     return data.map((order) => ({
-      id: ensureUUID(order.id),
-      customerId: ensureUUID(order.customer_id),
-      customerName: order.customer_name || "",
-      employeeId: ensureUUID(order.employee_id),
-      employeeName: order.employee_name || "",
-      total: parseFloat(String(order.total)) || 0,
-      createdAt: order.created_at ? new Date(order.created_at) : new Date(),
-      items: (order.order_items || []).map((item: any) => ({
-        id: item.id,
-        productId: ensureUUID(item.product_id),
-        productName: item.product_name,
-        quantity: parseInt(String(item.quantity)) || 1,
-        price: parseFloat(String(item.price)) || 0,
+      ...order,
+      status: order.status as OrderStatus,
+      items: order.order_items.map((item) => ({
+        ...item,
+        details: item.details as Json,
       })),
-    })) as Order[];
-  } catch (err) {
-    console.error("Error in fetchOrders:", err);
+    }));
+  } catch (error) {
+    console.error("Error in fetchOrders:", error);
     return [];
   }
 };
 
-export const fetchOrderById = async (id: string): Promise<Order | null> => {
-  if (!isSupabaseConfigured) {
-    console.warn("Supabase not configured, returning null order");
-    return null;
-  }
-
-  if (!id) {
-    console.error("Order ID is required");
-    return null;
-  }
-
+export const fetchOrderById = async (
+  orderId: number
+): Promise<Order | null> => {
   try {
-    const uuid = ensureUUID(id);
-
-    // First check if the order exists
-    const { count, error: countError } = await supabase
-      .from("orders")
-      .select("*", { count: "exact", head: true })
-      .eq("id", uuid);
-
-    if (countError) {
-      console.error("Error checking order existence:", countError);
-      return null;
-    }
-
-    if (!count) {
-      console.warn(`No order found with ID: ${uuid}`);
-      return null;
-    }
-
-    // Then fetch the order with its items
     const { data, error } = await supabase
       .from("orders")
       .select(
@@ -1286,94 +791,78 @@ export const fetchOrderById = async (id: string): Promise<Order | null> => {
         *,
         order_items (
           id,
+          order_id,
           product_id,
-          product_name,
           quantity,
-          price
+          price,
+          details,
+          created_at,
+          product:products!order_items_product_id_fkey (
+            id,
+            name,
+            price
+          )
         )
       `
       )
-      .eq("id", uuid)
-      .maybeSingle();
+      .eq("id", orderId)
+      .single();
 
     if (error) {
       console.error("Error fetching order:", error);
       return null;
     }
 
-    if (!data) {
-      console.warn(`No order data found with ID: ${uuid}`);
-      return null;
-    }
-
     return {
-      id: ensureUUID(data.id),
-      customerId: ensureUUID(data.customer_id),
-      customerName: data.customer_name || "",
-      employeeId: ensureUUID(data.employee_id),
-      employeeName: data.employee_name || "",
-      status: data.status || "pending",
-      total: parseFloat(String(data.total)) || 0,
-      items: (data.order_items || []).map((item: any) => ({
-        id: item.id || crypto.randomUUID(),
-        productId: ensureUUID(item.product_id),
-        productName: item.product_name || "Unknown Product",
-        quantity: parseInt(String(item.quantity)) || 1,
-        price: parseFloat(String(item.price)) || 0,
+      ...data,
+      status: data.status as OrderStatus,
+      items: data.order_items.map((item) => ({
+        ...item,
+        details: item.details as Json,
       })),
-      createdAt: data.created_at ? new Date(data.created_at) : new Date(),
-    } as Order;
-  } catch (err) {
-    console.error("Error in fetchOrderById:", err);
+    };
+  } catch (error) {
+    console.error("Error in fetchOrderById:", error);
     return null;
   }
 };
 
 export const createOrder = async (
-  order: Omit<Order, "id" | "createdAt">
-): Promise<Order | null> => {
-  if (!isSupabaseConfigured) {
-    console.warn("Supabase not configured, returning null for create order");
-    return null;
+  order: Omit<Order, "id" | "created_at" | "updated_at" | "items"> & {
+    items: Array<Omit<OrderItem, "id" | "order_id" | "created_at">>;
   }
-
+): Promise<Order | null> => {
   try {
-    // First validate stock availability for all items
+    // First check stock availability for all items
     for (const item of order.items) {
       const { data: product, error: productError } = await supabase
         .from("products")
         .select("stock")
-        .eq("id", item.productId)
+        .eq("id", item.product_id)
         .single();
 
       if (productError) {
         console.error("Error checking product stock:", productError);
-        throw new Error(`Failed to check stock for product ${item.productId}`);
+        return null;
       }
 
       if (!product || product.stock < item.quantity) {
         throw new Error(
-          `Insufficient stock for product ${item.productName}. Available: ${
+          `Insufficient stock for product ${item.product_id}. Available: ${
             product?.stock || 0
           }, Requested: ${item.quantity}`
         );
       }
     }
 
-    const newId = uuidv4();
-
-    // Prepare order data without items
+    // Create the order
     const orderData = {
-      id: newId,
-      customer_id: ensureUUID(order.customerId),
-      customer_name: order.customerName,
-      employee_id: ensureUUID(order.employeeId),
-      employee_name: order.employeeName,
-      total: parseFloat(String(order.total)) || 0,
-      created_at: new Date().toISOString(),
+      customer_id: order.customer_id,
+      employee_id: order.employee_id,
+      total: order.total,
+      status: order.status,
     };
 
-    // Create the order
     const { data: orderResult, error: orderError } = await supabase
       .from("orders")
       .insert([orderData])
@@ -1385,420 +874,241 @@ export const createOrder = async (
       return null;
     }
 
-    // Prepare and insert order items
-    if (order.items && order.items.length > 0) {
-      const orderItems = order.items.map((item) => ({
-        id: item.id || crypto.randomUUID(),
-        order_id: newId,
-        product_id: ensureUUID(item.productId),
-        product_name: item.productName,
-        quantity: parseInt(String(item.quantity)) || 1,
-        price: parseFloat(String(item.price)) || 0,
-      }));
-
-      const { error: itemsError } = await supabase
+    // Create order items and update product stock
+    const orderItems = [];
+    for (const item of order.items) {
+      // Create order item
+      const { data: orderItem, error: itemError } = await supabase
         .from("order_items")
-        .insert(orderItems);
+        .insert([
+          {
+            order_id: orderResult.id,
+            product_id: item.product_id,
+            quantity: item.quantity,
+            price: item.price,
+            details: item.details as Json,
+          },
+        ])
+        .select()
+        .single();
 
-      if (itemsError) {
-        console.error("Error creating order items:", itemsError);
-        // Attempt to delete the order since items failed
-        await supabase.from("orders").delete().eq("id", newId);
+      if (itemError) {
+        console.error("Error creating order item:", itemError);
+        // Rollback order creation
+        await supabase.from("orders").delete().eq("id", orderResult.id);
         return null;
       }
 
-      // Update product stock levels
-      for (const item of order.items) {
-        const { error: updateError } = await supabase.rpc("decrease_stock", {
-          p_product_id: item.productId,
-          p_quantity: item.quantity,
-        });
+      orderItems.push(orderItem);
 
-        if (updateError) {
-          console.error("Error updating product stock:", updateError);
-          // Attempt to delete the order since stock update failed
-          await supabase.from("orders").delete().eq("id", newId);
-          throw new Error(
-            `Failed to update stock for product ${item.productName}`
-          );
+      // Update product stock
+      const { error: stockError } = await supabase.functions.invoke(
+        "decrease_stock",
+        {
+          body: {
+            p_product_id: item.product_id,
+            p_quantity: item.quantity,
+          },
         }
+      );
+
+      if (stockError) {
+        console.error("Error updating product stock:", stockError);
+        // Rollback order creation
+        await supabase.from("orders").delete().eq("id", orderResult.id);
+        return null;
       }
     }
 
-    // Fetch the complete order with items
-    const { data: completeOrder, error: fetchError } = await supabase
-      .from("orders")
-      .select(
-        `
-        *,
-        order_items (
-          id,
-          product_id,
-          product_name,
-          quantity,
-          price
-        )
-      `
-      )
-      .eq("id", newId)
-      .single();
-
-    if (fetchError) {
-      console.error("Error fetching complete order:", fetchError);
-      return null;
-    }
-
-    // Convert snake_case back to camelCase for the response
     return {
-      id: ensureUUID(completeOrder.id),
-      customerId: ensureUUID(completeOrder.customer_id),
-      customerName: completeOrder.customer_name || "",
-      employeeId: ensureUUID(completeOrder.employee_id),
-      employeeName: completeOrder.employee_name || "",
-      items: (completeOrder.order_items || []).map((item: any) => ({
-        id: item.id,
-        productId: ensureUUID(item.product_id),
-        productName: item.product_name,
-        quantity: parseInt(String(item.quantity)) || 1,
-        price: parseFloat(String(item.price)) || 0,
+      ...orderResult,
+      status: orderResult.status as "pending" | "completed" | "cancelled",
+      items: orderItems.map((item) => ({
+        ...item,
+        details: item.details as Json,
       })),
-      total: parseFloat(String(completeOrder.total)) || 0,
-      createdAt: completeOrder.created_at
-        ? new Date(completeOrder.created_at)
-        : new Date(),
-    } as Order;
-  } catch (err) {
-    console.error("Error in createOrder:", err);
-    throw err;
+    };
+  } catch (error) {
+    console.error("Error in createOrder:", error);
+    return null;
   }
 };
 
 export const updateOrder = async (
-  id: string,
-  order: Partial<Order>
-): Promise<Order | null> => {
-  if (!isSupabaseConfigured) {
-    console.warn("Supabase not configured, returning null for update order");
-    return null;
+  id: number,
+  order: Partial<Omit<Order, "id" | "created_at" | "updated_at" | "items">> & {
+    items?: Array<Omit<OrderItem, "id" | "order_id" | "created_at">>;
   }
-
+): Promise<Order | null> => {
   try {
-    const uuid = ensureUUID(id);
+    // Update order base fields
+    if (Object.keys(order).length > 0) {
+      const { error: orderError } = await supabase
+        .from("orders")
+        .update(order)
+        .eq("id", id);
 
-    // First get the original order to compare item quantities
-    const { data: originalOrder, error: fetchError } = await supabase
-      .from("orders")
-      .select(
-        `
-        *,
-        order_items (
-          id,
-          product_id,
-          product_name,
-          quantity,
-          price
-        )
-      `
-      )
-      .eq("id", uuid)
-      .single();
-
-    if (fetchError) {
-      console.error("Error fetching original order:", fetchError);
-      return null;
-    }
-
-    // Create a map of original quantities by product ID
-    const originalQuantities = new Map<string, number>();
-    if (originalOrder?.order_items) {
-      for (const item of originalOrder.order_items) {
-        originalQuantities.set(item.product_id, item.quantity);
+      if (orderError) {
+        console.error("Error updating order:", orderError);
+        return null;
       }
     }
 
-    // Update base order data
-    const baseData = {
-      total:
-        order.total !== undefined ? parseFloat(String(order.total)) : undefined,
-      customer_id: order.customerId,
-      customer_name: order.customerName,
-      employee_id: order.employeeId,
-      employee_name: order.employeeName,
-    };
+    // Update order items if provided
+    if (order.items) {
+      // First, get current order items
+      const { data: currentItems, error: itemsError } = await supabase
+        .from("order_items")
+        .select("*")
+        .eq("order_id", id);
 
-    // Remove undefined values
-    const cleanedData = Object.fromEntries(
-      Object.entries(baseData).filter(([_, value]) => value !== undefined)
-    );
-
-    // Update base order
-    const { data: updatedOrder, error } = await supabase
-      .from("orders")
-      .update(cleanedData)
-      .eq("id", uuid)
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Error updating order:", error);
-      return null;
-    }
-
-    // Update order items and handle stock changes
-    if (order.items && order.items.length > 0) {
-      // First validate stock availability for new/increased quantities
-      for (const item of order.items) {
-        const originalQty = originalQuantities.get(item.productId) || 0;
-        const qtyDiff = item.quantity - originalQty;
-
-        if (qtyDiff > 0) {
-          // Check if we have enough stock for the increase
-          const { data: product, error: productError } = await supabase
-            .from("products")
-            .select("stock")
-            .eq("id", item.productId)
-            .single();
-
-          if (productError) {
-            console.error("Error checking product stock:", productError);
-            throw new Error(
-              `Failed to check stock for product ${item.productId}`
-            );
-          }
-
-          if (!product || product.stock < qtyDiff) {
-            throw new Error(
-              `Insufficient stock for product ${item.productName}. Available: ${
-                product?.stock || 0
-              }, Additional Requested: ${qtyDiff}`
-            );
-          }
-        }
+      if (itemsError) {
+        console.error("Error fetching current order items:", itemsError);
+        return null;
       }
 
-      // Handle stock updates for removed/changed items
-      for (const [productId, originalQty] of originalQuantities.entries()) {
-        const newItem = order.items.find(
-          (item) => item.productId === productId
-        );
-        const qtyDiff = (newItem?.quantity || 0) - originalQty;
-
-        if (qtyDiff < 0) {
-          // Increase stock for reduced quantity
-          const { error: increaseError } = await supabase.rpc(
-            "increase_stock",
-            {
-              p_product_id: productId,
-              p_quantity: Math.abs(qtyDiff),
-            }
-          );
-
-          if (increaseError) {
-            console.error("Error increasing stock:", increaseError);
-            throw new Error(`Failed to update stock for product ${productId}`);
-          }
-        } else if (qtyDiff > 0) {
-          // Decrease stock for increased quantity
-          const { error: decreaseError } = await supabase.rpc(
-            "decrease_stock",
-            {
-              p_product_id: productId,
-              p_quantity: qtyDiff,
-            }
-          );
-
-          if (decreaseError) {
-            console.error("Error decreasing stock:", decreaseError);
-            throw new Error(`Failed to update stock for product ${productId}`);
-          }
-        }
-      }
-
-      // Handle stock updates for new items
-      for (const item of order.items) {
-        if (!originalQuantities.has(item.productId)) {
-          const { error: decreaseError } = await supabase.rpc(
-            "decrease_stock",
-            {
-              p_product_id: item.productId,
-              p_quantity: item.quantity,
-            }
-          );
-
-          if (decreaseError) {
-            console.error(
-              "Error decreasing stock for new item:",
-              decreaseError
-            );
-            throw new Error(
-              `Failed to update stock for new product ${item.productId}`
-            );
-          }
-        }
-      }
-
-      // Update order items
-      const updatedItems = order.items.map((item) => ({
-        id: item.id || crypto.randomUUID(),
-        order_id: uuid,
-        product_id: ensureUUID(item.productId),
-        product_name: item.productName,
-        quantity: parseInt(String(item.quantity)) || 1,
-        price: parseFloat(String(item.price)) || 0,
-      }));
-
-      // Delete existing items
+      // Delete current items
       const { error: deleteError } = await supabase
         .from("order_items")
         .delete()
-        .eq("order_id", uuid);
+        .eq("order_id", id);
 
       if (deleteError) {
-        console.error("Error deleting order items:", deleteError);
+        console.error("Error deleting current order items:", deleteError);
         return null;
       }
 
-      // Insert new items
-      const { error: insertError } = await supabase
-        .from("order_items")
-        .insert(updatedItems);
+      // Restore stock for deleted items
+      for (const item of currentItems) {
+        const { error: stockError } = await supabase.functions.invoke(
+          "increase_stock",
+          {
+            body: {
+              p_product_id: item.product_id,
+              p_quantity: item.quantity,
+            },
+          }
+        );
 
-      if (insertError) {
-        console.error("Error updating order items:", insertError);
-        return null;
+        if (stockError) {
+          console.error("Error restoring product stock:", stockError);
+          return null;
+        }
+      }
+
+      // Create new items
+      for (const item of order.items) {
+        // Check stock availability
+        const { data: product, error: productError } = await supabase
+          .from("products")
+          .select("stock")
+          .eq("id", item.product_id)
+          .single();
+
+        if (productError) {
+          console.error("Error checking product stock:", productError);
+          return null;
+        }
+
+        if (!product || product.stock < item.quantity) {
+          throw new Error(
+            `Insufficient stock for product ${item.product_id}. Available: ${
+              product?.stock || 0
+            }, Requested: ${item.quantity}`
+          );
+        }
+
+        // Create order item
+        const { error: itemError } = await supabase.from("order_items").insert([
+          {
+            order_id: id,
+            product_id: item.product_id,
+            quantity: item.quantity,
+            price: item.price,
+            details: item.details as Json,
+          },
+        ]);
+
+        if (itemError) {
+          console.error("Error creating order item:", itemError);
+          return null;
+        }
+
+        // Update product stock
+        const { error: stockError } = await supabase.functions.invoke(
+          "decrease_stock",
+          {
+            body: {
+              p_product_id: item.product_id,
+              p_quantity: item.quantity,
+            },
+          }
+        );
+
+        if (stockError) {
+          console.error("Error updating product stock:", stockError);
+          return null;
+        }
       }
     }
 
-    // Fetch the complete updated order
-    const { data: completeOrder, error: fetchCompleteError } = await supabase
-      .from("orders")
-      .select(
-        `
-        *,
-        order_items (
-          id,
-          product_id,
-          product_name,
-          quantity,
-          price
-        )
-      `
-      )
-      .eq("id", uuid)
-      .single();
-
-    if (fetchCompleteError) {
-      console.error("Error fetching complete order:", fetchCompleteError);
-      return null;
-    }
-
-    // Convert to camelCase and return
-    return {
-      id: ensureUUID(completeOrder.id),
-      customerId: ensureUUID(completeOrder.customer_id),
-      customerName: completeOrder.customer_name || "",
-      employeeId: ensureUUID(completeOrder.employee_id),
-      employeeName: completeOrder.employee_name || "",
-      items: (completeOrder.order_items || []).map((item: any) => ({
-        id: item.id,
-        productId: ensureUUID(item.product_id),
-        productName: item.product_name,
-        quantity: parseInt(String(item.quantity)) || 1,
-        price: parseFloat(String(item.price)) || 0,
-      })),
-      total: parseFloat(String(completeOrder.total)) || 0,
-      createdAt: completeOrder.created_at
-        ? new Date(completeOrder.created_at)
-        : new Date(),
-    } as Order;
-  } catch (err) {
-    console.error("Error in updateOrder:", err);
-    throw err;
+    // Return updated order
+    return fetchOrderById(id);
+  } catch (error) {
+    console.error("Error in updateOrder:", error);
+    return null;
   }
 };
 
 export const deleteOrder = async (
-  id: string
+  id: number
 ): Promise<{ success: boolean; error?: string }> => {
-  if (!isSupabaseConfigured) {
-    console.warn("Supabase not configured, returning false for delete order");
-    return { success: false, error: "Database not configured" };
-  }
-
   try {
-    const uuid = ensureUUID(id);
+    // First get the order items to restore stock
+    const { data: items, error: itemsError } = await supabase
+      .from("order_items")
+      .select("*")
+      .eq("order_id", id);
 
-    // First fetch the order items to get their quantities
-    const { data: order, error: fetchError } = await supabase
-      .from("orders")
-      .select(
-        `
-        order_items (
-          product_id,
-          quantity
-        )
-      `
-      )
-      .eq("id", uuid)
-      .single();
-
-    if (fetchError) {
-      console.error("Error fetching order items:", fetchError);
-      return { success: false, error: "Failed to fetch order items" };
+    if (itemsError) {
+      console.error("Error fetching order items:", itemsError);
+      return { success: false, error: "Error fetching order items" };
     }
 
-    // Restore stock for each product
-    if (order?.order_items) {
-      for (const item of order.order_items) {
-        const { error: updateError } = await supabase.rpc("increase_stock", {
-          p_product_id: item.product_id,
-          p_quantity: item.quantity,
-        });
-
-        if (updateError) {
-          console.error("Error restoring product stock:", updateError);
-          return { success: false, error: "Failed to restore product stock" };
+    // Restore stock for all items
+    for (const item of items) {
+      const { error: stockError } = await supabase.functions.invoke(
+        "increase_stock",
+        {
+          body: {
+            p_product_id: item.product_id,
+            p_quantity: item.quantity,
+          },
         }
+      );
+
+      if (stockError) {
+        console.error("Error restoring product stock:", stockError);
+        return { success: false, error: "Error restoring product stock" };
       }
     }
 
-    // Delete order items
-    const { error: itemsError } = await supabase
-      .from("order_items")
-      .delete()
-      .eq("order_id", uuid);
+    // Delete the order (this will cascade delete the order items)
+    const { error } = await supabase.from("orders").delete().eq("id", id);
 
-    if (itemsError) {
-      console.error("Error deleting order items:", itemsError);
-      return { success: false, error: "Failed to delete order items" };
-    }
-
-    // Delete the order
-    const { error: orderError } = await supabase
-      .from("orders")
-      .delete()
-      .eq("id", uuid);
-
-    if (orderError) {
-      console.error("Error deleting order:", orderError);
-      return { success: false, error: "Failed to delete order" };
+    if (error) {
+      console.error("Error deleting order:", error);
+      return { success: false, error: error.message };
     }
 
     return { success: true };
-  } catch (err) {
-    console.error("Error in deleteOrder:", err);
-    return { success: false, error: "An unexpected error occurred" };
+  } catch (error) {
+    console.error("Error in deleteOrder:", error);
+    return { success: false, error: "Internal server error" };
   }
 };
 
 export const deleteAllRecords = async () => {
-  if (!isSupabaseConfigured) {
-    console.warn(
-      "Supabase not configured, returning false for delete all records"
-    );
-    return { success: false, error: "Database not configured" };
-  }
-
   try {
     // First delete all order_items (child of orders)
     const { error: orderItemsError } = await supabase
@@ -1875,22 +1185,19 @@ export const deleteAllRecords = async () => {
   }
 };
 
-export const getCustomerPurchaseCount = async (
-  customerId: string
-): Promise<number> => {
-  if (!isSupabaseConfigured) {
-    console.warn(
-      "Supabase not configured, returning 0 for customer purchase count"
-    );
-    return 0;
-  }
-
+export async function getCustomerPurchaseCount(
+  customerId: string | number
+): Promise<number> {
   try {
-    const uuid = ensureUUID(customerId);
+    if (!customerId || isNaN(Number(customerId))) {
+      console.error("Invalid customer ID:", customerId);
+      return 0;
+    }
+
     const { count, error } = await supabase
       .from("orders")
       .select("*", { count: "exact", head: true })
-      .eq("customer_id", uuid);
+      .eq("customer_id", Number(customerId));
 
     if (error) {
       console.error("Error getting customer purchase count:", error);
@@ -1898,11 +1205,11 @@ export const getCustomerPurchaseCount = async (
     }
 
     return count || 0;
-  } catch (err) {
-    console.error("Error in getCustomerPurchaseCount:", err);
+  } catch (error) {
+    console.error("Error in getCustomerPurchaseCount:", error);
     return 0;
   }
-};
+}
 
 export interface EmployeeSalesMetrics {
   totalSales: number;
@@ -1911,25 +1218,17 @@ export interface EmployeeSalesMetrics {
 }
 
 export const getEmployeeSalesMetrics = async (
-  employeeId: string
+  employeeId: string | number
 ): Promise<EmployeeSalesMetrics> => {
-  if (!isSupabaseConfigured) {
-    console.warn("Supabase not configured, returning zero metrics");
-    return {
-      totalSales: 0,
-      orderCount: 0,
-      averageOrderValue: 0,
-    };
-  }
-
   try {
-    const uuid = ensureUUID(employeeId);
+    const numericId =
+      typeof employeeId === "string" ? parseInt(employeeId, 10) : employeeId;
 
     // Get all orders for the employee
     const { data: orders, error } = await supabase
       .from("orders")
       .select("total")
-      .eq("employee_id", uuid);
+      .eq("employee_id", numericId);
 
     if (error) {
       console.error("Error fetching employee orders:", error);
